@@ -58,7 +58,7 @@ def train(savePath, model, optimizer, lossFunction, config, trainLoader, valLoad
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    numGroups = 1   # number of groups splited in training set
+    numGroups = 5   # number of groups splited in training set
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -86,5 +86,4 @@ if __name__ == "__main__":
         valLoader = None
 
     # train
-    for i in range(len(trainLoader)):
-        train(savePath, model, optimizer, lossFunction, config, trainLoader[i], valLoader)
+    train(savePath, model, optimizer, lossFunction, config, trainLoader[0], valLoader)

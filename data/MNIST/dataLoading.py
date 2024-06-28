@@ -27,7 +27,6 @@ class MNIST_train(Dataset):
         self.data = self.dataset.data
         self.labels = self.dataset.targets
         self.numGroups = numGroups
-        self.groupSize = len(self.data) // self.numGroups
         self.create_groups()
 
     # dataset.groups[0] is the first group containing [data, labels]
@@ -47,11 +46,12 @@ class MNIST_train(Dataset):
             self.corrIdx['val'] = valIndices
             allIdx = allIdx[valSize:]
 
+        groupSize = len(allIdx) // self.numGroups
         for i in range(self.numGroups):
-            start = i * self.groupSize
-            end = (i + 1) * self.groupSize
+            start = i * groupSize
+            end = (i + 1) * groupSize
             # check last group and end != len(data)
-            if i == self.numGroups - 1 and end != len(self.data):
+            if i == self.numGroups - 1 and end != len(allIdx):
                 end = len(self.data)
             group_indices = allIdx[start:end]
             group_data = self.data[group_indices]
