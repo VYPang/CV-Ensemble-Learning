@@ -1,6 +1,18 @@
+classes:
+  0: 'T-shirt/top'
+  1: 'Trouser'
+  2: 'Pullover'
+  3: 'Dress'
+  4: 'Coat'
+  5: 'Sandal'
+  6: 'Shirt'
+  7: 'Sneaker'
+  8: 'Bag'
+  9: 'Ankle boot'
+
 train:
   batch_size: 64
   lr : 0.01
   momentum: 0.5
-  epochs: 30
+  epochs: 5
   val_split: 0.2

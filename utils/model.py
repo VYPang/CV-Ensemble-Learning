@@ -25,7 +25,7 @@ class softmax_CNN(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.2),
         )
-        self.output = nn.Linear(100, 10)
+        self.output = nn.Linear(100, numClass)
     
     def forward(self, x):
         x = self.conv_layers(x)

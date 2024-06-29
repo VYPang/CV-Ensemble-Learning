@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from data.MNIST.dataLoading import MNIST_train
+from data.dataLoading import MNIST_train
 from torch.utils.data import DataLoader
 from utils.model import softmax_CNN
 import torch.optim as optim
@@ -56,6 +56,9 @@ def train(savePath, model, optimizer, lossFunction, config, trainLoader, valLoad
     torch.save(model.state_dict(), savePath + f'/final.pt')
     print('Model saved, all done!')
 
+def inference(model, lossFunction, config, trainLoader):
+    pass
+
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
     numGroups = 5   # number of groups splited in training set
@@ -65,11 +68,6 @@ if __name__ == "__main__":
         device = torch.device("cuda:0")
     else:
         device = torch.device("cpu")
-
-    numClass = 10
-    model = softmax_CNN(numClass).to(device)
-    optimizer = optim.SGD(model.parameters(), lr=config.train.lr, momentum=config.train.momentum)
-    lossFunction = nn.CrossEntropyLoss()
 
     # create checkpoint folder
     current_time = datetime.datetime.now()
@@ -84,6 +82,11 @@ if __name__ == "__main__":
         valLoader = DataLoader(trainSet.valSet, batch_size=config.train.batch_size, shuffle=True)
     else:
         valLoader = None
+
+    numClass = len(config.classes)
+    model = softmax_CNN(numClass).to(device)
+    optimizer = optim.SGD(model.parameters(), lr=config.train.lr, momentum=config.train.momentum)
+    lossFunction = nn.CrossEntropyLoss()
 
     # train
     train(savePath, model, optimizer, lossFunction, config, trainLoader[0], valLoader)

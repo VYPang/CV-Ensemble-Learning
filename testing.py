@@ -7,7 +7,7 @@ import numpy as np
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
 import pickle
-from data.MNIST.dataLoading import MNIST_test
+from data.dataLoading import MNIST_test
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go
 
@@ -47,7 +47,8 @@ def testing(model, lossFunction, config, testLoader):
     print(f'Over All Accuracy: {accurates/len(testLoader)}')
     return lossRecord, accRecord, countRecord, vectorRecord
 
-def graphPerf(lossRecord, accRecord, countRecord):
+def graphPerf(lossRecord, accRecord, countRecord, config):
+    classes = config.classes
     # plot loss histogram
     all_losses = [loss for losses in lossRecord.values() for loss in losses]
     min_loss = min(all_losses)
@@ -58,7 +59,7 @@ def graphPerf(lossRecord, accRecord, countRecord):
     for i, (ax, losses) in enumerate(zip(axes.flat, lossRecord.values())):
         # Plot the histogram for the current class
         ax.hist(losses, bins=50, range=(min_loss, max_loss))
-        ax.set_title(f'Class {i}')
+        ax.set_title(f'Class {classes[i]}')
         ax.set_xlabel('Loss Value')
         ax.set_ylabel('Frequency')
     # Adjust the spacing between subplots
@@ -74,7 +75,7 @@ def graphPerf(lossRecord, accRecord, countRecord):
     ax.bar(range(len(accuracy)), accuracy)
     # Set the x-axis ticks and labels
     ax.set_xticks(range(len(accuracy)))
-    ax.set_xticklabels([f'{i}' for i in range(len(accuracy))])
+    ax.set_xticklabels([f'{classes[i]}' for i in range(len(accuracy))])
     # Set the axis labels and title
     ax.set_xlabel('Class')
     ax.set_ylabel('Accuracy')
@@ -86,9 +87,10 @@ def graphPerf(lossRecord, accRecord, countRecord):
 
     # info printing
     for i in range(len(accRecord)):
-        print(f'Number {i} (total counts: {countRecord[i]}\taccuracy: {round(accuracy[i], 4)})')
+        print(f'{classes[i]} (total counts: {countRecord[i]}\taccuracy: {round(accuracy[i], 4)})')
 
-def pcaAnalysis(vectorRecord):
+def pcaAnalysis(vectorRecord, config):
+    classes = config.classes
     vectors = np.array([vectorRecord[i][1] for i in range(len(vectorRecord))])
     pca = PCA(n_components=3)
     print('fitting pca...')
@@ -112,7 +114,7 @@ def pcaAnalysis(vectorRecord):
                                     z=data[:, 2],
                                     mode='markers',
                                     marker=dict(size=2.5),
-                                    name=f'class {i}'
+                                    name=f'class {classes[i]}'
                                    ))
     fig.update_layout(scene=dict(
         xaxis_title='PC1',
@@ -120,11 +122,11 @@ def pcaAnalysis(vectorRecord):
         zaxis_title='PC3'
     ))
     fig.write_html('pca.html')
+    print('pca analysis done!')
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
     modelPath = 'ckpt/whole/final.pt'
-    numGroups = 5   # number of groups splited in training set
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -132,7 +134,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    numClass = 10
+    numClass = len(config.classes)
     model = softmax_CNN(numClass, test=True).to(device)
     lossFunction = nn.CrossEntropyLoss()
     model.load_state_dict(torch.load(modelPath, map_location=device))
@@ -143,5 +145,5 @@ if __name__ == "__main__":
 
     # test
     lossRecord, accRecord, countRecord, vectorRecord = testing(model, lossFunction, config, testLoader)
-    graphPerf(lossRecord, accRecord, countRecord)
-    pcaAnalysis(vectorRecord)
+    graphPerf(lossRecord, accRecord, countRecord, config)
+    pcaAnalysis(vectorRecord, config)
