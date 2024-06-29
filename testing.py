@@ -34,7 +34,7 @@ def testing(model, lossFunction, config, testLoader):
         accurates += (predicted == y).sum().item()
 
         # record performance
-        lossRecord[y.numpy()[0]].append(loss.item())
+        lossRecord[y.cpu().numpy()[0]].append(loss.item())
         if predicted == y:
             accRecord[y.item()] += 1
         countRecord[y.item()] += 1
