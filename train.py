@@ -51,9 +51,9 @@ def train(savePath, model, optimizer, lossFunction, config, trainLoader, valLoad
                 val_tqdm.set_postfix(val_loss=average_val_loss)
         print('\n')
         
-        if epoch+1 % 100 == 0:
+        if epoch+1 % 20 == 0:
             torch.save(model, savePath + f'/epoch{epoch+1}-{average_loss}-{average_val_loss}.pt')
-    torch.save(model, savePath + f'/final-{average_loss}-{average_val_loss}.pt')
+    torch.save(model.state_dict(), savePath + f'/final.pt')
     print('Model saved, all done!')
 
 if __name__ == "__main__":
