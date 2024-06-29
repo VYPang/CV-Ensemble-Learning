@@ -5,25 +5,29 @@ from torch.utils.data import DataLoader
 from utils.model import softmax_CNN
 import numpy as np
 from omegaconf import OmegaConf
-from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 import pickle
+from data.MNIST.dataLoading import MNIST_test
+from sklearn.decomposition import PCA
+import plotly.graph_objects as go
 
 def testing(model, lossFunction, config, testLoader):
     total_loss = 0
     accurates = 0
     model.eval()
     lossRecord = {i:[] for i in range(10)}
-    accRecord = [0 for i in range(10)]
-    countRecord = [0 for i in range(10)]
+    accRecord = [0 for _ in range(10)]
+    countRecord = [0 for _ in range(10)]
+    vectorRecord = {}
     test_tqdm = tqdm(testLoader, total=len(testLoader))
     for batch_idx, batch in enumerate(test_tqdm):
         test_tqdm.set_description(f'Testing')
 
-        x, y = batch
+        x, y, mainSet_idx = batch
         y = y.to(device)
-        x = x.to(device)
-        output = model(x)
+        x = x.float().to(device)[:, None, ...]
+        output, vector = model(x)
+        vectorRecord[mainSet_idx.cpu().numpy()[0]] = [y.item(), vector.cpu().detach().numpy()[0]]
 
         # calculate loss
         loss = lossFunction(output, y)
@@ -41,7 +45,7 @@ def testing(model, lossFunction, config, testLoader):
         
     print(f'Over All Loss: {total_loss/len(testLoader)}')
     print(f'Over All Accuracy: {accurates/len(testLoader)}')
-    return lossRecord, accRecord, countRecord
+    return lossRecord, accRecord, countRecord, vectorRecord
 
 def graphPerf(lossRecord, accRecord, countRecord):
     # plot loss histogram
@@ -84,6 +88,38 @@ def graphPerf(lossRecord, accRecord, countRecord):
     for i in range(len(accRecord)):
         print(f'Number {i} (total counts: {countRecord[i]}\taccuracy: {round(accuracy[i], 4)})')
 
+def pcaAnalysis(vectorRecord):
+    vectors = np.array([vectorRecord[i][1] for i in range(len(vectorRecord))])
+    pca = PCA(n_components=3)
+    print('fitting pca...')
+    pca.fit(vectors)
+
+    # group vectors by class
+    vectorGroup = {i:[] for i in range(10)}
+    mainSetIdx = {i:[] for i in range(10)}
+    for i in range(len(vectorRecord)):
+        vectorGroup[vectorRecord[i][0]].append(vectorRecord[i][1])
+        mainSetIdx[vectorRecord[i][0]].append(i)
+    
+    # plot pca
+    fig = go.Figure()
+    for i in range(len(vectorGroup)):
+        data = pca.transform(np.array(vectorGroup[i]))
+        text = [f'mainSetIdx: {idx}' for idx in mainSetIdx[i]]
+        fig.add_trace(go.Scatter3d(text=text,
+                                    x=data[:, 0],
+                                    y=data[:, 1],
+                                    z=data[:, 2],
+                                    mode='markers',
+                                    marker=dict(size=2.5),
+                                    name=f'class {i}'
+                                   ))
+    fig.update_layout(scene=dict(
+        xaxis_title='PC1',
+        yaxis_title='PC2',
+        zaxis_title='PC3'
+    ))
+    fig.write_html('pca.html')
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
@@ -97,17 +133,15 @@ if __name__ == "__main__":
         device = torch.device("cpu")
 
     numClass = 10
-    model = softmax_CNN(numClass).to(device)
+    model = softmax_CNN(numClass, test=True).to(device)
     lossFunction = nn.CrossEntropyLoss()
     model.load_state_dict(torch.load(modelPath, map_location=device))
 
     # load dataset
-    testSet = datasets.MNIST(root='./data', train=False, download=True, transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ]))
+    testSet = MNIST_test()
     testLoader = DataLoader(testSet, batch_size=1, shuffle=False)
 
     # test
-    lossRecord, accRecord, countRecord = testing(model, lossFunction, config, testLoader)
+    lossRecord, accRecord, countRecord, vectorRecord = testing(model, lossFunction, config, testLoader)
     graphPerf(lossRecord, accRecord, countRecord)
+    pcaAnalysis(vectorRecord)

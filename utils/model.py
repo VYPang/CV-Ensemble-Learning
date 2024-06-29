@@ -2,9 +2,10 @@ import torch.nn as nn
 import torch.nn.functional as f
 
 class softmax_CNN(nn.Module):
-    def __init__(self, numClass):
+    def __init__(self, numClass, test=False):
         super().__init__()
         self.numClass = numClass
+        self.test = test
 
         # convolution layer
         self.conv_layers = nn.Sequential(
@@ -23,10 +24,15 @@ class softmax_CNN(nn.Module):
             nn.Linear(320, 100),
             nn.ReLU(),
             nn.Dropout(0.2),
-            nn.Linear(100, 10)
         )
+        self.output = nn.Linear(100, 10)
     
     def forward(self, x):
         x = self.conv_layers(x)
         x = self.fc_layers(x)
-        return nn.functional.log_softmax(x, dim=1)
+        if self.test:
+            vector = x
+        x = self.output(x)
+        if self.test:
+            return f.log_softmax(x, dim=1), vector
+        return f.log_softmax(x, dim=1)

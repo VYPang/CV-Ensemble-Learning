@@ -2,6 +2,23 @@ from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader
 import random
 
+class MNIST_test(Dataset):
+    def __init__(self):
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        self.dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+        self.data = self.dataset.data
+        self.labels = self.dataset.targets
+        self.mainset_idx = list(range(len(self.data)))
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, index):
+        return self.data[index], self.labels[index], self.mainset_idx[index]
+
 class MNIST_train_subset(Dataset):
     def __init__(self, data, labels, mainset_idx):
         self.data = data
