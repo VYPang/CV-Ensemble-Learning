@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from utils.model import softmax_CNN
+from utils.model import AlexNet
 import numpy as np
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
 import pickle
-from data.dataLoading import MNIST_test
+from data.dataLoading import testSource
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go
 
@@ -25,7 +25,9 @@ def testing(model, lossFunction, config, testLoader):
 
         x, y, mainSet_idx = batch
         y = y.to(device)
-        x = x.float().to(device)[:, None, ...]
+        x = x.float().to(device)
+        if len(x.shape) == 3:
+            x = x[:, None, ...]
         output, vector = model(x)
         vectorRecord[mainSet_idx.cpu().numpy()[0]] = [y.item(), vector.cpu().detach().numpy()[0]]
 
@@ -48,7 +50,7 @@ def testing(model, lossFunction, config, testLoader):
     return lossRecord, accRecord, countRecord, vectorRecord
 
 def graphPerf(lossRecord, accRecord, countRecord, config):
-    classes = config.classes
+    classes = config.data.classes
     # plot loss histogram
     all_losses = [loss for losses in lossRecord.values() for loss in losses]
     min_loss = min(all_losses)
@@ -87,10 +89,10 @@ def graphPerf(lossRecord, accRecord, countRecord, config):
 
     # info printing
     for i in range(len(accRecord)):
-        print(f'{classes[i]} (total counts: {countRecord[i]}\taccuracy: {round(accuracy[i], 4)})')
+        print(f'{classes[i]} \t(total counts: {countRecord[i]}\taccuracy: {round(accuracy[i], 4)})')
 
 def pcaAnalysis(vectorRecord, config):
-    classes = config.classes
+    classes = config.data.classes
     vectors = np.array([vectorRecord[i][1] for i in range(len(vectorRecord))])
     pca = PCA(n_components=3)
     print('fitting pca...')
@@ -134,13 +136,14 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    numClass = len(config.classes)
-    model = softmax_CNN(numClass, test=True).to(device)
+    numClass = len(config.data.classes)
+    channel = config.data.shape[0]
+    model = AlexNet(channel, numClass, test=True).to(device)
     lossFunction = nn.CrossEntropyLoss()
     model.load_state_dict(torch.load(modelPath, map_location=device))
 
     # load dataset
-    testSet = MNIST_test()
+    testSet = testSource()
     testLoader = DataLoader(testSet, batch_size=1, shuffle=False)
 
     # test

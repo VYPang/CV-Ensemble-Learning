@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from data.dataLoading import MNIST_train
+from data.dataLoading import trainSource
 from torch.utils.data import DataLoader
-from utils.model import softmax_CNN
+from utils.model import AlexNet
 import torch.optim as optim
 import numpy as np
 import datetime
@@ -23,7 +23,9 @@ def train(savePath, model, optimizer, lossFunction, config, trainLoader, valLoad
 
             x, y, _ = batch
             y = y.to(device)
-            x = x.float().to(device)[:, None, ...]
+            x = x.float().to(device)
+            if len(x.shape) == 3:
+                x = x[:, None, ...]
 
             output = model(x)
             loss = lossFunction(output, y)
@@ -42,8 +44,7 @@ def train(savePath, model, optimizer, lossFunction, config, trainLoader, valLoad
                 model.eval()
                 x, y, _ = batch
                 y = y.to(device)
-                x = x.float().to(device)[:, None, ...]
-
+                x = x.float().to(device)
                 output = model(x)
                 loss = lossFunction(output, y)
                 total_val_loss += loss
@@ -76,15 +77,16 @@ if __name__ == "__main__":
     os.makedirs(savePath)
 
     # load dataset
-    trainSet = MNIST_train(numGroups=numGroups, valSplit=config.train.val_split)
+    trainSet = trainSource(numGroups=numGroups, valSplit=config.train.val_split, augmentation=True)
     trainLoader = [DataLoader(i, batch_size=config.train.batch_size, shuffle=True) for i in trainSet.groups]
     if config.train.val_split > 0:
         valLoader = DataLoader(trainSet.valSet, batch_size=config.train.batch_size, shuffle=True)
     else:
         valLoader = None
 
-    numClass = len(config.classes)
-    model = softmax_CNN(numClass).to(device)
+    numClass = len(config.data.classes)
+    channel = config.data.shape[0]
+    model = AlexNet(channel, numClass).to(device)
     optimizer = optim.SGD(model.parameters(), lr=config.train.lr, momentum=config.train.momentum)
     lossFunction = nn.CrossEntropyLoss()
 
