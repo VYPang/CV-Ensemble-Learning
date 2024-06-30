@@ -28,11 +28,15 @@ class testSource(Dataset):
         return data, label, mainset_idx
 
 class trainSubset(Dataset):
-    def __init__(self, data, labels, mainset_idx, augmentation=False):
+    def __init__(self, data, groundTruth, mainset_idx, labeled=True, augmentation=False):
         self.data = data
-        self.labels = labels
+        self.groundTruth = torch.tensor(groundTruth) if not isinstance(groundTruth, torch.Tensor) else groundTruth
         self.mainset_idx = mainset_idx
         self.augmentation = augmentation
+        if labeled:
+            self.labels = self.groundTruth
+        else:
+            self.labels = np.nan * np.ones(len(self.groundTruth))
     
     def __len__(self):
         return len(self.data)
@@ -61,6 +65,14 @@ class trainSubset(Dataset):
         data = torch.from_numpy(data).float()
         return data, label, mainset_idx # idx allow keep track of the loss value of each sample
 
+'''
+trainSource init arguments:
+    numGroups: number of groups splited in training set (the first group is labeled set)
+    valSplit: the proportion of validation set
+    augmentation: whether to use data augmentation
+
+    This is to mimic the semi-supervised learning scenario (for numGroup > 1)
+'''
 class trainSource(Dataset):
     def __init__(self, numGroups=5, valSplit=0, augmentation=False):
         # Load the MNIST dataset
@@ -80,8 +92,6 @@ class trainSource(Dataset):
 
     # dataset.groups[0] is the first group containing [data, labels]
     def create_groups(self):
-        self.groups = []
-        self.corrIdx = {}
         allIdx = list(range(len(self.data)))
         random.Random(0).shuffle(allIdx) # shuffle the indices
 
@@ -92,10 +102,12 @@ class trainSource(Dataset):
             valLabels = self.labels[valIndices]
             valSet = trainSubset(valData, valLabels, valIndices)
             self.valSet = valSet
-            self.corrIdx['val'] = valIndices
+            self.valSetIdx = valIndices
             allIdx = allIdx[valSize:]
 
         groupSize = len(allIdx) // self.numGroups
+        self.unlabeledSet = []
+        self.unlabeledSetIdx = {}
         for i in range(self.numGroups):
             start = i * groupSize
             end = (i + 1) * groupSize
@@ -105,21 +117,22 @@ class trainSource(Dataset):
             group_indices = allIdx[start:end]
             group_data = self.data[group_indices]
             group_labels = self.labels[group_indices]
-            subset = trainSubset(group_data, group_labels, group_indices, augmentation=self.augmentation)
-            self.groups.append(subset)
-            self.corrIdx[i] = group_indices
+            if i == 0:  # first group is labeled set
+                subset = trainSubset(group_data, group_labels, group_indices, labeled=True, augmentation=self.augmentation)
+                self.labeledSet = subset
+                self.labeledSetIdx = group_indices
+            else:       # other groups are unlabeled set
+                subset = trainSubset(group_data, group_labels, group_indices, labeled=False, augmentation=self.augmentation)
+                self.unlabeledSet.append(subset)
+                self.unlabeledSetIdx[i] = group_indices
 
 # testing
 if __name__ == "__main__":
     dataset = trainSource(1, valSplit=0.1, augmentation=True)
-    loader = [DataLoader(i, batch_size=1, shuffle=True) for i in dataset.groups]
-    val = DataLoader(dataset.valSet, batch_size=1, shuffle=True)
-    # for i in range(3):
-    #     for batch in loader[0]:
-    #         data, labels, idx = batch
-    #         print(data.shape, labels.shape, idx.shape)
-
-    for batch in val:
-        data, labels, idx = batch
-        print(data.shape, labels.shape, idx.shape)
-        break
+    valSet = dataset.valSet
+    labeledSet = dataset.labeledSet
+    unlabeledSet = dataset.unlabeledSet # list of unlabeled set
+    labeledSetLoader = DataLoader(labeledSet, batch_size=1, shuffle=True)
+    for batch in labeledSetLoader:
+        data, label, idx = batch
+        print(data.shape, label, idx)
