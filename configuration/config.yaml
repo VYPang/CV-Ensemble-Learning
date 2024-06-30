@@ -1,18 +1,20 @@
-classes:
-  0: 'T-shirt/top'
-  1: 'Trouser'
-  2: 'Pullover'
-  3: 'Dress'
-  4: 'Coat'
-  5: 'Sandal'
-  6: 'Shirt'
-  7: 'Sneaker'
-  8: 'Bag'
-  9: 'Ankle boot'
+data:
+  shape: [3, 32, 32]
+  classes:
+    0: 'airplane'
+    1: 'automobile'
+    2: 'bird'
+    3: 'cat'
+    4: 'deer'
+    5: 'dog'
+    6: 'frog'
+    7: 'horse'
+    8: 'ship'
+    9: 'truck'
 
 train:
   batch_size: 64
   lr : 0.01
   momentum: 0.5
-  epochs: 5
+  epochs: 50
   val_split: 0.2
