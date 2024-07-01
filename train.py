@@ -79,6 +79,30 @@ def inference(model, lossFunction, config, dataSets):
             _, predicted = torch.max(output, 1)
             dataSet.updateLabel(mainSet_idx.cpu().numpy(), predicted.cpu().numpy())
 
+def voteInference(modelList, lossFunction, config, dataSets):
+    dataLoaderList = [DataLoader(data, batch_size=config.train.batch_size, shuffle=False) for data in dataSets]
+    for modelIdx in range(len(modelList)):
+        model = modelList[modelIdx]
+        model.eval()
+        for i in tqdm(range(len(dataLoaderList)), desc='Inference with model '+str(modelIdx)):
+            dataLoader = dataLoaderList[i]
+            dataSet = dataSets[i]
+            for batch_idx, batch in enumerate(dataLoader):
+                x, y, mainSet_idx = batch
+                y = y.to(device)
+                x = x.float().to(device)
+                if len(x.shape) == 3:
+                    x = x[:, None, ...]
+                output = model(x)
+                loss = lossFunction(output, y)
+                dataSet.updateVoteRecord(mainSet_idx.cpu().numpy(), 
+                                         output.cpu().detach().numpy(),
+                                         modelIdx)
+    # vote to update pseudo-label
+    for dataset in dataSets:
+        dataset.voteUpdateLabel()
+
+
 def semiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, unlabeledSet, valLoader=None):
     # Train model with labeled data
     print('Training with labeled data')
@@ -96,9 +120,47 @@ def semiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, u
     train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=True)
     print('Training completed, model saved at', savePath)
 
+def votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, unlabeledSet, valLoader=None):
+    # Train model with labeled data
+    print('Training with labeled data')
+    labeledLoader = DataLoader(labeledSet, batch_size=config.train.batch_size, shuffle=True)
+    model = train(savePath, device, lossFunction, config, labeledLoader, valLoader, saveModel=False)
+
+    # Update pseudo-label of unlabeled data with model
+    print('Inference with unlabeled data')
+    inference(model, lossFunction, config, unlabeledSet)
+
+    # Voting module
+    # Train model with labeled and pseudo-labeled data (AB, AC, AD,..., AZ)
+    print('Bagging with labeled and pseudo-labeled data')
+    modelList = []
+    for i in range(len(unlabeledSet)):
+        print(f'Training with pseudo-labeled data (Model {i})')
+        mixedData = torch.utils.data.ConcatDataset([labeledSet] + [unlabeledSet[i]])
+        mixedLoader = DataLoader(mixedData, batch_size=config.train.batch_size, shuffle=True)
+        model = train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=False)
+        modelList.append(model)
+    # Inference with test data and vote
+    print('Inference with unlabeled data')
+    voteInference(modelList, lossFunction, config, unlabeledSet)
+
+    # semi-supervised learning with voted pseudo-label
+    print('Training with voted pseudo-labeled data')
+    mixedData = torch.utils.data.ConcatDataset([labeledSet] + unlabeledSet)
+    mixedLoader = DataLoader(mixedData, batch_size=config.train.batch_size, shuffle=True)
+    model = train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=False)
+    inference(model, lossFunction, config, unlabeledSet)
+
+    # train final model
+    print('Training final model')
+    mixedData = torch.utils.data.ConcatDataset([labeledSet] + unlabeledSet)
+    mixedLoader = DataLoader(mixedData, batch_size=config.train.batch_size, shuffle=True)
+    train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=True)
+    print('Training completed, model saved at', savePath)
+
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    numGroups = 5   # number of groups splited in training set
+    numGroups = 1 # number of groups splited in training set
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -123,6 +185,14 @@ if __name__ == "__main__":
         valLoader = None
     
     lossFunction = nn.CrossEntropyLoss()
-    # semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
+
+    '''
+        Trainning mode
+            - train model with labeled data
+            - semi-supervised learning with labeled and unlabeled data
+            - voted semi-supervised learning with labeled and unlabeled data
+    '''
     trainLoader = DataLoader(labeledData, batch_size=config.train.batch_size, shuffle=True)
     train(savePath, device, lossFunction, config, trainLoader, valLoader=valLoader, saveModel=True)
+    # semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
+    # votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
