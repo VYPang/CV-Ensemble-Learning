@@ -11,7 +11,6 @@ class testSource(Dataset):
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
-        #self.dataset = datasets.STL10(root='./data', split='test', download=True, transform=transform)
         self.dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
         self.data = self.dataset.data
         self.labels = self.dataset.targets
@@ -30,14 +29,20 @@ class testSource(Dataset):
 class trainSubset(Dataset):
     def __init__(self, data, groundTruth, mainset_idx, labeled=True, augmentation=False):
         self.data = data
-        self.groundTruth = torch.tensor(groundTruth) if not isinstance(groundTruth, torch.Tensor) else groundTruth
+        self.groundTruth = groundTruth
         self.mainset_idx = mainset_idx
+        self.mainSet2Subset = {mainset_idx[i]: i for i in range(len(mainset_idx))}
         self.augmentation = augmentation
+        self.voteRecord = []
         if labeled:
             self.labels = self.groundTruth
         else:
-            self.labels = np.nan * np.ones(len(self.groundTruth))
+            self.labels = np.ones(len(self.groundTruth)) * -1
     
+    def updateLabel(self, idx, label):
+        for i in range(len(idx)):
+            self.labels[self.mainSet2Subset[idx[i]]] = label[i]
+
     def __len__(self):
         return len(self.data)
     
@@ -63,6 +68,8 @@ class trainSubset(Dataset):
                                        beta=np.random.randint(-10, 11))
         data = data.transpose(2, 0, 1)
         data = torch.from_numpy(data).float()
+        if not isinstance(label, torch.Tensor):
+            label = torch.tensor(label).to(torch.long)
         return data, label, mainset_idx # idx allow keep track of the loss value of each sample
 
 '''
@@ -128,11 +135,13 @@ class trainSource(Dataset):
 
 # testing
 if __name__ == "__main__":
-    dataset = trainSource(1, valSplit=0.1, augmentation=True)
+    dataset = trainSource(5, valSplit=0.1, augmentation=True)
     valSet = dataset.valSet
     labeledSet = dataset.labeledSet
     unlabeledSet = dataset.unlabeledSet # list of unlabeled set
-    labeledSetLoader = DataLoader(labeledSet, batch_size=1, shuffle=True)
-    for batch in labeledSetLoader:
-        data, label, idx = batch
-        print(data.shape, label, idx)
+
+    mixedData = torch.utils.data.ConcatDataset([labeledSet] + unlabeledSet)
+    mixedLoader = DataLoader(dataset=mixedData, batch_size=32, shuffle=True)
+    for batch in mixedLoader:
+        data, label, mainset_idx = batch
+        print(data.shape, label, mainset_idx)
