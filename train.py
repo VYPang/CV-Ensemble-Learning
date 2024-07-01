@@ -160,7 +160,7 @@ def votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledS
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    numGroups = 1 # number of groups splited in training set
+    numGroups = 5 # number of groups splited in training set
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     os.makedirs(savePath)
 
     # load dataset
-    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, augmentation=True)
+    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, augmentation=True, dataBalanced=True)
     labeledData = trainData.labeledSet
     unlabeledData = trainData.unlabeledSet
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
             - semi-supervised learning with labeled and unlabeled data
             - voted semi-supervised learning with labeled and unlabeled data
     '''
-    trainLoader = DataLoader(labeledData, batch_size=config.train.batch_size, shuffle=True)
-    train(savePath, device, lossFunction, config, trainLoader, valLoader=valLoader, saveModel=True)
+    # trainLoader = DataLoader(labeledData, batch_size=config.train.batch_size, shuffle=True)
+    # train(savePath, device, lossFunction, config, trainLoader, valLoader=valLoader, saveModel=True)
     # semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
-    # votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
+    votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
