@@ -10,6 +10,7 @@ import pickle
 from data.dataLoading import testSource
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go
+from sklearn.metrics import ConfusionMatrixDisplay
 
 def testing(model, lossFunction, config, testLoader):
     total_loss = 0
@@ -18,6 +19,7 @@ def testing(model, lossFunction, config, testLoader):
     lossRecord = {i:[] for i in range(10)}
     accRecord = [0 for _ in range(10)]
     countRecord = [0 for _ in range(10)]
+    confusionMatrix = np.zeros((10, 10))
     vectorRecord = {}
     test_tqdm = tqdm(testLoader, total=len(testLoader))
     for batch_idx, batch in enumerate(test_tqdm):
@@ -45,47 +47,52 @@ def testing(model, lossFunction, config, testLoader):
             accRecord[y.item()] += 1
         countRecord[y.item()] += 1
         
+        # confusion matrix
+        confusionMatrix[y.item(), predicted.item()] += 1
+        
     print(f'Over All Loss: {total_loss/len(testLoader)}')
     print(f'Over All Accuracy: {accurates/len(testLoader)}')
-    return lossRecord, accRecord, countRecord, vectorRecord
+    return lossRecord, accRecord, countRecord, vectorRecord, confusionMatrix
 
-def graphPerf(lossRecord, accRecord, countRecord, config):
+def graphPerf(lossRecord, accRecord, countRecord, confusionMatrix, config):
     classes = config.data.classes
     # plot loss histogram
     all_losses = [loss for losses in lossRecord.values() for loss in losses]
     min_loss = min(all_losses)
     max_loss = max(all_losses)
-    # Create a figure and a grid of subplots
     fig, axes = plt.subplots(nrows=2, ncols=5, figsize=(15, 8))
-    # Iterate over the keys (classes) in the dictionary
     for i, (ax, losses) in enumerate(zip(axes.flat, lossRecord.values())):
-        # Plot the histogram for the current class
         ax.hist(losses, bins=50, range=(min_loss, max_loss))
         ax.set_title(f'Class {classes[i]}')
         ax.set_xlabel('Loss Value')
         ax.set_ylabel('Frequency')
-    # Adjust the spacing between subplots
     plt.subplots_adjust(wspace=0.4, hspace=0.6)
-    # Show the plot
     plt.savefig('lossHistogram.jpg')
     plt.clf()
 
     # plot accuracy histogram
     accuracy = [accRecord[i]/countRecord[i] for i in range(len(accRecord))]
     fig, ax = plt.subplots(figsize=(10, 6))
-    # Plot the bar chart
     ax.bar(range(len(accuracy)), accuracy)
-    # Set the x-axis ticks and labels
     ax.set_xticks(range(len(accuracy)))
     ax.set_xticklabels([f'{classes[i]}' for i in range(len(accuracy))])
-    # Set the axis labels and title
     ax.set_xlabel('Class')
     ax.set_ylabel('Accuracy')
     ax.set_title('Accuracy per Class')
-    # Adjust the layout
     plt.tight_layout()
-    # Show the plot
     plt.savefig('accuracyBar.jpg')
+    plt.clf()
+
+    # graph confusion matrix
+    fig, ax = plt.subplots(figsize=(10, 10))
+    disp = ConfusionMatrixDisplay(confusionMatrix.astype(int), display_labels=classes)
+    disp.plot()
+    disp.plot(ax=ax)
+    ax.set_title('Confusion Matrix')
+    ax.set_xlabel('Predicted Label')
+    ax.set_ylabel('True Label')
+    plt.tight_layout()
+    plt.savefig('confusionMatrix.jpg', dpi=300)
 
     # info printing
     for i in range(len(accRecord)):
@@ -128,7 +135,7 @@ def pcaAnalysis(vectorRecord, config):
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    modelPath = 'ckpt/whole/final.pt'
+    modelPath = 'ckpt/semi-supervised/final.pt'
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -147,6 +154,6 @@ if __name__ == "__main__":
     testLoader = DataLoader(testSet, batch_size=1, shuffle=False)
 
     # test
-    lossRecord, accRecord, countRecord, vectorRecord = testing(model, lossFunction, config, testLoader)
-    graphPerf(lossRecord, accRecord, countRecord, config)
+    lossRecord, accRecord, countRecord, vectorRecord, confusionMatrix = testing(model, lossFunction, config, testLoader)
+    graphPerf(lossRecord, accRecord, countRecord, confusionMatrix, config)
     pcaAnalysis(vectorRecord, config)
