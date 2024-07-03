@@ -87,14 +87,14 @@ class trainSubset(Dataset):
 
 '''
 trainSource init arguments:
-    numGroups: number of groups splited in training set (the first group is labeled set)
+    numGroups: number of unlabeled groups
     valSplit: the proportion of validation set
     augmentation: whether to use data augmentation
 
     This is to mimic the semi-supervised learning scenario (for numGroup > 1)
 '''
 class trainSource(Dataset):
-    def __init__(self, numGroups=5, valSplit=0, augmentation=False, dataBalanced=False):
+    def __init__(self, numGroups=5, valSplit=0, labeledSplit = 0.2, augmentation=False, dataBalanced=False):
         # Load the MNIST dataset
         transform = transforms.Compose([
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -102,6 +102,7 @@ class trainSource(Dataset):
         #self.dataset = datasets.STL10(root='./data', split='train', download=True, transform=transform)
         self.dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
         self.valSplit = valSplit
+        self.labeledSplit = labeledSplit
         self.data = self.dataset.data
         self.labels = self.dataset.targets
         if not isinstance(self.labels, torch.Tensor):
@@ -135,33 +136,50 @@ class trainSource(Dataset):
                 valSet = trainSubset(valData, valLabels, valIndices)
                 self.valSet = valSet
                 self.valSetIdx = valIndices
-            
+            # compute remaining data size
             dataSize = 0
             for i in classIdx.values():
                 dataSize += len(i)
-            groupSize = dataSize // self.numGroups
-            self.unlabeledSet = []
-            self.unlabeledSetIdx = {}
-            for i in range(self.numGroups):
-                classSize = groupSize // 10
-                group_indices = []
-                if i == self.numGroups - 1:
-                    for j in range(10):
-                        group_indices += classIdx[j]
-                else:
-                    for j in range(10):
-                        group_indices += classIdx[j][:classSize]
-                        classIdx[j] = classIdx[j][classSize:]
-                group_data = self.data[group_indices]
-                group_labels = self.labels[group_indices]
-                if i == 0:  # first group is labeled set
-                    subset = trainSubset(group_data, group_labels, group_indices, labeled=True, augmentation=self.augmentation)
-                    self.labeledSet = subset
-                    self.labeledSetIdx = group_indices
-                else:       # other groups are unlabeled set
+            # split labeled data
+            labeledSize = int(dataSize * self.labeledSplit)
+            classSize = labeledSize // 10
+            group_indices = []
+            for i in range(10):
+                group_indices += classIdx[i][:classSize]
+                classIdx[i] = classIdx[i][classSize:]
+            group_data = self.data[group_indices]
+            group_labels = self.labels[group_indices]
+            labeledSet = trainSubset(group_data, group_labels, group_indices, labeled=True, augmentation=self.augmentation)
+            self.labeledSet = labeledSet
+            self.labeledSetIdx = group_indices
+
+            if self.numGroups > 0:
+                # compute remaining data size
+                dataSize = 0
+                for i in classIdx.values():
+                    dataSize += len(i)
+                # split unlabeled data
+                groupSize = dataSize // self.numGroups
+                self.unlabeledSet = []
+                self.unlabeledSetIdx = {}
+                for i in range(self.numGroups):
+                    classSize = groupSize // 10
+                    group_indices = []
+                    if i == self.numGroups - 1:
+                        for j in range(10):
+                            group_indices += classIdx[j]
+                    else:
+                        for j in range(10):
+                            group_indices += classIdx[j][:classSize]
+                            classIdx[j] = classIdx[j][classSize:]
+                    group_data = self.data[group_indices]
+                    group_labels = self.labels[group_indices]
                     subset = trainSubset(group_data, group_labels, group_indices, labeled=False, augmentation=self.augmentation)
                     self.unlabeledSet.append(subset)
                     self.unlabeledSetIdx[i] = group_indices
+            else:
+                self.unlabeledSet = []
+                self.unlabeledSetIdx = {}
         else:
             allIdx = list(range(len(self.data)))
             random.Random(0).shuffle(allIdx) # shuffle the indices
@@ -175,26 +193,31 @@ class trainSource(Dataset):
                 self.valSetIdx = valIndices
                 allIdx = allIdx[valSize:]
 
-            groupSize = len(allIdx) // self.numGroups
-            self.unlabeledSet = []
-            self.unlabeledSetIdx = {}
-            for i in range(self.numGroups):
-                start = i * groupSize
-                end = (i + 1) * groupSize
-                # check last group and end != len(data)
-                if i == self.numGroups - 1 and end != len(allIdx):
-                    end = len(self.data)
-                group_indices = allIdx[start:end]
-                group_data = self.data[group_indices]
-                group_labels = self.labels[group_indices]
-                if i == 0:  # first group is labeled set
-                    subset = trainSubset(group_data, group_labels, group_indices, labeled=True, augmentation=self.augmentation)
-                    self.labeledSet = subset
-                    self.labeledSetIdx = group_indices
-                else:       # other groups are unlabeled set
+            # labeled data
+            labeledSize = int(len(allIdx) * self.labeledSplit)
+            labeledIndices = allIdx[:labeledSize]
+            allIdx = allIdx[labeledSize:]
+            labeledData = self.data[labeledIndices]
+            labeledLabels = self.labels[labeledIndices]
+            labeledSet = trainSubset(labeledData, labeledLabels, labeledIndices, labeled=True, augmentation=self.augmentation)
+            self.labeledSet = labeledSet
+            self.labeledSetIdx = labeledIndices
+            # unlabeled data
+            if self.numGroups > 0:
+                groupSize = len(allIdx) // self.numGroups
+                self.unlabeledSet = []
+                self.unlabeledSetIdx = {}
+                for i in range(self.numGroups):
+                    group_indices = allIdx[:groupSize]
+                    allIdx = allIdx[groupSize:]
+                    group_data = self.data[group_indices]
+                    group_labels = self.labels[group_indices]
                     subset = trainSubset(group_data, group_labels, group_indices, labeled=False, augmentation=self.augmentation)
                     self.unlabeledSet.append(subset)
                     self.unlabeledSetIdx[i] = group_indices
+            else:
+                self.unlabeledSet = []
+                self.unlabeledSetIdx = {}
 
 # testing
 if __name__ == "__main__":
