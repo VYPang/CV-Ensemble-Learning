@@ -3,7 +3,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from data.dataLoading import trainSource
 from torch.utils.data import DataLoader
-from utils.model import AlexNet
+from utils.model import basicCNN
 import torch.optim as optim
 import datetime
 from omegaconf import OmegaConf
@@ -13,7 +13,7 @@ import os
 def train(savePath, device, lossFunction, config, trainLoader, valLoader=None, saveModel=True):
     numClass = len(config.data.classes)
     channel = config.data.shape[0]
-    model = AlexNet(channel, numClass).to(device)
+    model = basicCNN(channel, numClass).to(device)
     optimizer = optim.SGD(model.parameters(), lr=config.train.lr, momentum=config.train.momentum)
 
     epochs = config.train.epochs
@@ -103,21 +103,23 @@ def voteInference(modelList, lossFunction, config, dataSets):
         dataset.voteUpdateLabel()
 
 
-def semiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, unlabeledSet, valLoader=None):
+def semiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, unlabeledSet, valLoader=None, iteration=1):
     # Train model with labeled data
     print('Training with labeled data')
     labeledLoader = DataLoader(labeledSet, batch_size=config.train.batch_size, shuffle=True)
     model = train(savePath, device, lossFunction, config, labeledLoader, valLoader, saveModel=False)
 
-    # Update pseudo-label of unlabeled data with model
-    print('Inference with unlabeled data')
-    inference(model, lossFunction, config, unlabeledSet)
-    
-    # Train model with labeled and pseudo-labeled data
-    print('Training with labeled and pseudo-labeled data')
-    mixedData = torch.utils.data.ConcatDataset([labeledSet] + unlabeledSet)
-    mixedLoader = DataLoader(mixedData, batch_size=config.train.batch_size, shuffle=True)
-    train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=True)
+    for i in range(iteration):
+        # Update pseudo-label of unlabeled data with model
+        print('Inference with unlabeled data')
+        inference(model, lossFunction, config, unlabeledSet)
+        
+        # Train model with labeled and pseudo-labeled data
+        print('Training with labeled and pseudo-labeled data')
+        mixedData = torch.utils.data.ConcatDataset([labeledSet] + unlabeledSet)
+        mixedLoader = DataLoader(mixedData, batch_size=config.train.batch_size, shuffle=True)
+        saveModel = True if i == iteration-1 else False
+        model = train(savePath, device, lossFunction, config, mixedLoader, valLoader, saveModel=saveModel)
     print('Training completed, model saved at', savePath)
 
 def votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledSet, unlabeledSet, valLoader=None):
@@ -160,7 +162,9 @@ def votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledS
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    numGroups = 5 # number of groups splited in training set
+    labeledSplit = 0.2 # percentage of labeled data
+    numGroups = 1   # number of unlabeled data groups
+    iteration = 5   # number of iteration for semi-supervised learning
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -175,7 +179,7 @@ if __name__ == "__main__":
     os.makedirs(savePath)
 
     # load dataset
-    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, augmentation=True, dataBalanced=True)
+    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, labeledSplit=labeledSplit, augmentation=True, dataBalanced=False)
     labeledData = trainData.labeledSet
     unlabeledData = trainData.unlabeledSet
 
@@ -194,5 +198,5 @@ if __name__ == "__main__":
     '''
     # trainLoader = DataLoader(labeledData, batch_size=config.train.batch_size, shuffle=True)
     # train(savePath, device, lossFunction, config, trainLoader, valLoader=valLoader, saveModel=True)
-    # semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
-    votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
+    semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader, iteration=iteration)
+    # votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
