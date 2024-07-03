@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from utils.model import AlexNet
+from utils.model import basicCNN
 import numpy as np
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
@@ -52,6 +52,7 @@ def testing(model, lossFunction, config, testLoader):
         
     print(f'Over All Loss: {total_loss/len(testLoader)}')
     print(f'Over All Accuracy: {accurates/len(testLoader)}')
+    print(f'Worst Group Accuracy: {min(accRecord)/countRecord[np.argmin(accRecord)]}')
     return lossRecord, accRecord, countRecord, vectorRecord, confusionMatrix
 
 def graphPerf(lossRecord, accRecord, countRecord, confusionMatrix, config):
@@ -135,7 +136,7 @@ def pcaAnalysis(vectorRecord, config):
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    modelPath = 'ckpt/semi-supervised/final.pt'
+    modelPath = 'ckpt/A/final.pt'
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -145,7 +146,7 @@ if __name__ == "__main__":
 
     numClass = len(config.data.classes)
     channel = config.data.shape[0]
-    model = AlexNet(channel, numClass, test=True).to(device)
+    model = basicCNN(channel, numClass, test=True).to(device)
     lossFunction = nn.CrossEntropyLoss()
     model.load_state_dict(torch.load(modelPath, map_location=device))
 
