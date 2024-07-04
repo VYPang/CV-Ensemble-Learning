@@ -12,8 +12,8 @@ import os
 
 def train(savePath, device, lossFunction, config, trainLoader, valLoader=None, saveModel=True):
     numClass = len(config.data.classes)
-    channel = config.data.shape[0]
-    model = basicCNN(channel, numClass).to(device)
+    shape = config.data.shape
+    model = basicCNN(shape, numClass).to(device)
     optimizer = optim.SGD(model.parameters(), lr=config.train.lr, momentum=config.train.momentum)
 
     epochs = config.train.epochs
@@ -163,8 +163,8 @@ def votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledS
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
     labeledSplit = 0.2 # percentage of labeled data
-    numGroups = 1   # number of unlabeled data groups
-    iteration = 5   # number of iteration for semi-supervised learning
+    numGroups = 4   # number of unlabeled data groups
+    iteration = 1   # number of iteration for semi-supervised learning
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     os.makedirs(savePath)
 
     # load dataset
-    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, labeledSplit=labeledSplit, augmentation=True, dataBalanced=False)
+    trainData = trainSource(numGroups=numGroups, valSplit=config.train.val_split, labeledSplit=labeledSplit, augmentation=True, dataBalanced=True)
     labeledData = trainData.labeledSet
     unlabeledData = trainData.unlabeledSet
 
@@ -198,5 +198,5 @@ if __name__ == "__main__":
     '''
     # trainLoader = DataLoader(labeledData, batch_size=config.train.batch_size, shuffle=True)
     # train(savePath, device, lossFunction, config, trainLoader, valLoader=valLoader, saveModel=True)
-    semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader, iteration=iteration)
-    # votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)
+    # semiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader, iteration=iteration)
+    votedSemiSupervisedLearning(savePath, device, lossFunction, config, labeledData, unlabeledData, valLoader)

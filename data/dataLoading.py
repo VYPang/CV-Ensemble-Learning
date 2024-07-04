@@ -13,7 +13,11 @@ class testSource(Dataset):
         ])
         self.dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
         self.data = self.dataset.data
+        if not isinstance(self.data, np.ndarray):
+            self.data = np.array(self.data)
         self.labels = self.dataset.targets
+        if not isinstance(self.labels, torch.Tensor):
+            self.labels = torch.tensor(self.labels)
         self.mainset_idx = list(range(len(self.data)))
     
     def __len__(self):
@@ -21,6 +25,8 @@ class testSource(Dataset):
     
     def __getitem__(self, index):
         data, label, mainset_idx = self.data[index], self.labels[index], self.mainset_idx[index]
+        if len(data.shape) == 2:
+            data = data[:, :, None]
         data = data.transpose(2, 0, 1)
         data = torch.from_numpy(data).float()
         label = torch.tensor(label)
@@ -62,23 +68,34 @@ class trainSubset(Dataset):
     def __getitem__(self, index):
         data, label, mainset_idx = self.data[index], self.labels[index], self.mainset_idx[index]
         if self.augmentation:
-            height, width, channel = data.shape
             data = data.copy()
+            if len(data.shape) == 2:
+                height, width = data.shape
+                channel = 1
+                data = data[:, :, None]
+            else:
+                height, width, channel = data.shape
             if np.random.rand() < 0.5:
                 data = np.flip(data, axis=1)
             # shift the colored image
             if np.random.rand() < 0.5:
                 dx, dy = np.random.randint(-2, 3, 2)
                 data =  cv2.warpAffine(data, np.float32([[1, 0, dx], [0, 1, dy]]), (width, height))
+                if channel == 1:
+                    data = data[:, :, None]
             # rotate the image
             if np.random.rand() < 0.5:
                 angle = np.random.randint(-15, 16)
                 M = cv2.getRotationMatrix2D((width/2, height/2), angle, 1)
                 data = cv2.warpAffine(data, M, (width, height))
+                if channel == 1:
+                    data = data[:, :, None]
             # change the brightness
             data = cv2.convertScaleAbs(data, 
                                        alpha=np.random.uniform(0.9, 1.1),
                                        beta=np.random.randint(-10, 11))
+            if channel == 1:
+                data = data[:, :, None]
         data = data.transpose(2, 0, 1)
         data = torch.from_numpy(data).float()
         if not isinstance(label, torch.Tensor):
@@ -104,6 +121,8 @@ class trainSource(Dataset):
         self.valSplit = valSplit
         self.labeledSplit = labeledSplit
         self.data = self.dataset.data
+        if not isinstance(self.data, np.ndarray):
+            self.data = np.array(self.data)
         self.labels = self.dataset.targets
         if not isinstance(self.labels, torch.Tensor):
             self.labels = torch.tensor(self.labels)
@@ -123,7 +142,7 @@ class trainSource(Dataset):
                     classIdx[label] = []
                 classIdx[label].append(i)
             for i in range(10):
-                random.Random(0).shuffle(classIdx[i])
+                random.Random().shuffle(classIdx[i])
             # split the valSet equally by class
             if self.valSplit > 0:
                 valSize = int(len(self.data) * self.valSplit)
@@ -182,7 +201,7 @@ class trainSource(Dataset):
                 self.unlabeledSetIdx = {}
         else:
             allIdx = list(range(len(self.data)))
-            random.Random(0).shuffle(allIdx) # shuffle the indices
+            random.Random(1).shuffle(allIdx) # shuffle the indices
             if self.valSplit > 0:
                 valSize = int(len(self.data) * self.valSplit)
                 valIndices = allIdx[:valSize]
@@ -221,6 +240,7 @@ class trainSource(Dataset):
 
 # testing
 if __name__ == "__main__":
+    testSource = testSource()
     dataset = trainSource(5, valSplit=0.1, augmentation=True, dataBalanced=True)
     valSet = dataset.valSet
     labeledSet = dataset.labeledSet

@@ -123,7 +123,7 @@ def pcaAnalysis(vectorRecord, config):
                                     y=data[:, 1],
                                     z=data[:, 2],
                                     mode='markers',
-                                    marker=dict(size=2.5),
+                                    marker=dict(size=4),
                                     name=f'class {classes[i]}'
                                    ))
     fig.update_layout(scene=dict(
@@ -136,7 +136,7 @@ def pcaAnalysis(vectorRecord, config):
 
 if __name__ == "__main__":
     configPath = 'configuration/config.yaml'
-    modelPath = 'ckpt/A/final.pt'
+    modelPath = 'ckpt/CIFAR/vote/final.pt'
     config = OmegaConf.load(configPath)
 
     if torch.cuda.is_available():
@@ -145,8 +145,8 @@ if __name__ == "__main__":
         device = torch.device("cpu")
 
     numClass = len(config.data.classes)
-    channel = config.data.shape[0]
-    model = basicCNN(channel, numClass, test=True).to(device)
+    shape = config.data.shape
+    model = basicCNN(shape, numClass, test=True).to(device)
     lossFunction = nn.CrossEntropyLoss()
     model.load_state_dict(torch.load(modelPath, map_location=device))
 

@@ -2,9 +2,10 @@ import torch.nn as nn
 import torch.nn.functional as f
 
 class basicCNN(nn.Module):
-    def __init__(self, channel, num_class, test=False):
+    def __init__(self, shape, num_class, test=False):
         super(basicCNN, self).__init__()
         self.test = test
+        channel = shape[0]
         self.features = nn.Sequential(
             nn.Conv2d(channel, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(inplace=True),
